@@ -64,5 +64,12 @@ path prefix, user headers).
 
 ## Release
 
-Bump `version` in `guest_wifi/config.yaml` (and `package.json`), push; Home Assistant offers
-the update.
+Every version gets release notes, so people see what changed when Home Assistant offers the
+update.
+
+1. Bump `version` in `guest_wifi/config.yaml` and `guest_wifi/package.json`.
+2. Add a section for it at the top of `guest_wifi/CHANGELOG.md`: what is new or fixed, in
+   plain words, plus anything to do after updating ("After updating: ...") and any new
+   permission or behaviour to know about ("Good to know: ...").
+3. Run `dev/check-release.sh`; it fails if the versions differ or the notes are missing.
+4. Push. Home Assistant offers the update and shows the notes.
