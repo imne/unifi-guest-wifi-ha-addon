@@ -242,5 +242,5 @@ class GuestWifiCard extends HTMLElement {
 if (!customElements.get('guest-wifi-card')) customElements.define('guest-wifi-card', GuestWifiCard);
 window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === 'guest-wifi-card')) {
-  window.customCards.push({ type: 'guest-wifi-card', name: 'Guest WiFi', description: 'Shows the latest guest WiFi token and generates new ones (Guest WiFi Manager add-on).', preview: false });
+  window.customCards.push({ type: 'guest-wifi-card', name: 'Guest WiFi', description: 'Shows the latest guest WiFi token and generates new ones (Guest WiFi Manager add-on).', preview: true });
 }
