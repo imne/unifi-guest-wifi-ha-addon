@@ -1,0 +1,74 @@
+blueprint:
+  name: Guest WiFi – generate token
+  description: >-
+    Creates guest WiFi tokens with the Guest WiFi Manager add-on and returns them to
+    whatever called this script. Call the script with "response_variable: wifi", then use
+    {{ wifi.code }} (the first token) or {{ wifi.codes }} (all of them). If it fails,
+    wifi.code is empty and wifi.error says why.
+  domain: script
+  source_url: https://github.com/imne/unifi-guest-wifi-ha-addon/blob/main/blueprints/script/guest_wifi_generate_token.yaml
+  input:
+    default_lifetime:
+      name: Default lifetime (minutes)
+      description: Used when the call gives no lifetime_minutes. Counted from the guest's first login.
+      default: 1440
+      selector:
+        number: { min: 1, max: 525600, mode: box, unit_of_measurement: min }
+    timeout:
+      name: Timeout (seconds)
+      description: How long to wait for the add-on to answer.
+      default: 30
+      selector:
+        number: { min: 5, max: 120, mode: box, unit_of_measurement: s }
+
+mode: queued
+max: 10
+
+fields:
+  count:
+    name: Number of tokens
+    default: 1
+    selector:
+      number: { min: 1, max: 50, mode: box }
+  lifetime_minutes:
+    name: Lifetime (minutes)
+    description: Leave empty for the script's default.
+    selector:
+      number: { min: 1, max: 525600, mode: box, unit_of_measurement: min }
+  devices:
+    name: Devices per token
+    default: 1
+    selector:
+      number: { min: 1, max: 10, mode: box }
+  note:
+    name: Note
+    description: Shown next to the token, for example the guest's name.
+    selector:
+      text:
+
+variables:
+  default_lifetime: !input default_lifetime
+  timeout_seconds: !input timeout
+  request_id: "{{ now().timestamp() | string ~ '-' ~ range(10000, 99999) | random }}"
+
+sequence:
+  - event: guest_wifi_generate
+    event_data:
+      request_id: "{{ request_id }}"
+      count: "{{ count | default(1) | int(1) }}"
+      lifetime_minutes: "{{ lifetime_minutes | default(default_lifetime, true) | int(1440) }}"
+      devices: "{{ devices | default(1) | int(1) }}"
+      note: "{{ note | default('') }}"
+  # The add-on writes the result to this sensor with our request_id
+  - wait_template: "{{ state_attr('sensor.guest_wifi_last_token', 'request_id') == request_id }}"
+    timeout:
+      seconds: "{{ timeout_seconds | int(30) }}"
+    continue_on_timeout: true
+  - variables:
+      result: >-
+        {% set answered = wait.completed %}
+        {% set error = state_attr('sensor.guest_wifi_last_token', 'error') if answered else 'The Guest WiFi Manager add-on did not answer. Is it running?' %}
+        {% set codes = (state_attr('sensor.guest_wifi_last_token', 'codes') or []) if answered and not error else [] %}
+        {{ {'code': codes[0] if codes else '', 'codes': codes, 'error': error or ''} }}
+  - stop: Finished
+    response_variable: result

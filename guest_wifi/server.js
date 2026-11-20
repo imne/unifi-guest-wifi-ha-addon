@@ -16,6 +16,7 @@ import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { startAutomations } from './automations.js';
 
 const env = (name, fallback) => process.env[name] ?? fallback;
 
@@ -172,6 +173,35 @@ const publicVoucher = (v) => ({
   authorizedGuestCount: v.authorizedGuestCount ?? 0,
 });
 
+// Creates vouchers on the router. Used by the page and by automations; validates everything.
+async function createVouchers({ count = 1, minutes, guests = 1, note = '', by }) {
+  count = Number(count ?? 1);
+  minutes = Number(minutes);
+  guests = Number(guests ?? 1);
+  const cleanNote = String(note ?? '').replace(/[^\p{L}\p{N} .,'_-]/gu, '').trim().slice(0, 40);
+  if (!Number.isInteger(count) || count < 1 || count > config.maxCount) throw fail(400, `Number of tokens must be 1–${config.maxCount}`);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 525600) throw fail(400, 'Token lifetime must be 1 minute to 365 days');
+  if (!Number.isInteger(guests) || guests < 1 || guests > 10) throw fail(400, 'Devices per token must be 1–10');
+
+  const sid = await siteId();
+  const name = [config.voucherPrefix, cleanNote || by].join(' ').slice(0, 80);
+  const result = await unifi('POST', `/v1/sites/${sid}/hotspot/vouchers`, {
+    count, name, timeLimitMinutes: minutes, authorizedGuestLimit: guests,
+  });
+  console.log(JSON.stringify({ event: 'vouchers.created', by, count, minutes, guests }));
+  return (result.vouchers || []).map(publicVoucher);
+}
+
+// What went wrong, in words fit for the page or an automation's error message.
+function describeError(err) {
+  if (err.expose) return err.message;
+  const s = err.upstreamStatus;
+  const where = managed ? "on the add-on's Configuration tab" : 'under Router settings';
+  if (/certificate|self.signed|CERT_/i.test(`${err.code} ${err.message}`)) return `The router's certificate could not be verified. Turn off certificate verification ${where}`;
+  if (s === 401 || s === 403) return `The router does not accept the API key. Update it ${where}`;
+  return `Could not reach the router${router ? ` at ${new URL(router.url).host}` : ''}`;
+}
+
 // --- HTTP helpers -------------------------------------------------------------
 // Home Assistant frames the page on its own origin, so only same-origin framing is allowed.
 const SECURITY_HEADERS = {
@@ -282,21 +312,12 @@ async function handle(req, res) {
   if (route === 'POST /api/vouchers') {
     if (!isTrustedWrite(req)) return send(res, 403, { error: 'Forbidden' });
     const body = await readJson(req);
-    const count = Number(body.count);
     const lifetime = LIFETIMES.find((l) => l.minutes === Number(body.timeLimitMinutes));
-    const guests = body.authorizedGuestLimit == null ? 1 : Number(body.authorizedGuestLimit);
-    const note = String(body.note ?? '').replace(/[^\p{L}\p{N} .,'_-]/gu, '').trim().slice(0, 40);
-    if (!Number.isInteger(count) || count < 1 || count > config.maxCount) throw fail(400, `Number of tokens must be 1–${config.maxCount}`);
     if (!lifetime) throw fail(400, 'Unknown token lifetime');
-    if (!Number.isInteger(guests) || guests < 1 || guests > 10) throw fail(400, 'Devices per token must be 1–10');
-
-    const sid = await siteId();
-    const name = [config.voucherPrefix, note || user.name].join(' ').slice(0, 80);
-    const result = await unifi('POST', `/v1/sites/${sid}/hotspot/vouchers`, {
-      count, name, timeLimitMinutes: lifetime.minutes, authorizedGuestLimit: guests,
+    const vouchers = await createVouchers({
+      count: body.count, minutes: lifetime.minutes, guests: body.authorizedGuestLimit, note: body.note, by: user.name,
     });
-    console.log(JSON.stringify({ event: 'vouchers.created', by: user.name, count, minutes: lifetime.minutes, guests }));
-    return send(res, 201, { vouchers: (result.vouchers || []).map(publicVoucher), lifetime });
+    return send(res, 201, { vouchers, lifetime });
   }
 
   const del = pathname.match(/^\/api\/vouchers\/([0-9a-f-]{36})$/i);
@@ -320,11 +341,11 @@ http.createServer((req, res) => {
   handle(req, res).catch((err) => {
     if (err.expose) return send(res, err.status, { error: err.message });
     console.error(err.message);
-    const s = err.upstreamStatus;
-    const where = managed ? "on the add-on's Configuration tab" : 'under Router settings';
-    if (/certificate|self.signed|CERT_/i.test(`${err.code} ${err.message}`)) return send(res, 502, { error: `The router's certificate could not be verified. Turn off certificate verification ${where}` });
-    send(res, 502, { error: s === 401 || s === 403 ? `The router does not accept the API key. Update it ${managed ? "on the add-on's Configuration tab" : 'under Router settings'}` : `Could not reach the router${router ? ` at ${new URL(router.url).host}` : ''}` });
+    send(res, 502, { error: describeError(err) });
   });
 }).listen(config.port, config.host, () => {
   console.log(`guest-wifi listening on http://${config.host}:${config.port} (${router ? `router ${router.url}, from ${managed ? 'the Configuration tab' : 'in-app setup'}` : 'router not set up yet'})`);
 });
+
+// Lets Home Assistant automations create tokens (see automations.js)
+startAutomations({ createVouchers, describeError });

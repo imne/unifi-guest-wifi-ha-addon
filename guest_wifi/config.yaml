@@ -1,7 +1,7 @@
 # Home Assistant add-on: Guest WiFi Manager in the sidebar, signed in by Home Assistant.
 # Keep "version" the same as package.json.
 name: Guest WiFi Manager
-version: "1.1.0"
+version: "1.2.0"
 slug: guest_wifi
 description: Generate UniFi guest WiFi tokens (hotspot vouchers) for your guests
 url: https://github.com/imne/unifi-guest-wifi-ha-addon
@@ -10,6 +10,9 @@ arch:
   - amd64
 init: false
 ingress: true
+# Lets the add-on listen for the guest_wifi_generate event and publish the result,
+# so automations can create tokens
+homeassistant_api: true
 ingress_port: 8099
 panel_icon: mdi:wifi-star
 panel_title: Guest WiFi
