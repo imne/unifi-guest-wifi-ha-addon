@@ -7,8 +7,9 @@
 // signed-in Home Assistant user, and it shows the page in a frame on Home Assistant's
 // own origin under a generated path (so the UI only uses relative URLs).
 //
-// The router's address and API key are asked for in the app on first use and kept in
-// /data/settings.json (the add-on's private, persistent folder).
+// The router's address and API key come from the add-on's Configuration tab
+// (/data/options.json). If those are left empty, the app asks for them on first use and
+// keeps them in /data/settings.json (the add-on's private, persistent folder).
 
 import http from 'node:http';
 import https from 'node:https';
@@ -21,7 +22,8 @@ const env = (name, fallback) => process.env[name] ?? fallback;
 const config = {
   host: env('HOST', '0.0.0.0'),
   port: Number(env('PORT', '8099')),
-  settingsFile: env('SETTINGS_FILE', '/data/settings.json'),
+  optionsFile: env('OPTIONS_FILE', '/data/options.json'),      // written by Home Assistant
+  settingsFile: env('SETTINGS_FILE', '/data/settings.json'),   // written by the in-app setup
   // Only these addresses may connect: the Supervisor's ingress proxy. (Overridden for local testing.)
   allowedClients: env('ALLOWED_CLIENT_IPS', '172.30.32.2').split(',').map((s) => s.trim()).filter(Boolean),
   unifiSite: env('UNIFI_SITE', 'default'),          // site id or internal name
@@ -44,18 +46,46 @@ const fail = (status, message) => Object.assign(new Error(message), { status, ex
 // --- Router connection (set in the app, saved to settingsFile) -------------------
 const makeAgent = (verifyTls) => new https.Agent({ rejectUnauthorized: Boolean(verifyTls), keepAlive: true });
 
-let router = null;   // { url, key, verifyTls, agent } once set up
-try {
-  if (fs.existsSync(config.settingsFile)) {
-    const s = JSON.parse(fs.readFileSync(config.settingsFile, 'utf8'));
+// "192.168.1.1" or "https://unifi.example:8443" -> origin, or null if it is not usable
+function routerOrigin(input) {
+  if (typeof input !== 'string' || !input.trim()) return null;
+  const raw = input.trim();
+  try {
+    const url = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`);
+    return url.protocol === 'https:' && url.hostname ? url.origin : null;
+  } catch { return null; }
+}
+
+function readJsonFile(file) {
+  try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}; }
+  catch (e) { console.error(`Ignoring unreadable ${file}: ${e.message}`); return {}; }
+}
+
+let router = null;        // { url, key, verifyTls, agent } once known
+// managed: the Configuration tab has values, so they win and the in-app setup is off.
+// optionsError: what is wrong with those values, shown in the app.
+let managed = false;
+let optionsError = '';
+{
+  const o = readJsonFile(config.optionsFile);
+  const address = String(o.router_address ?? '').trim();
+  const key = String(o.api_key ?? '').trim();
+  managed = Boolean(address || key);
+  if (managed) {
+    const origin = routerOrigin(address);
+    if (!address) optionsError = 'The API key is set but the router address is empty.';
+    else if (!origin) optionsError = `"${address.slice(0, 60)}" is not a usable router address. Use something like 192.168.1.1.`;
+    else if (!key) optionsError = 'The router address is set but the API key is empty.';
+    else router = { url: origin, key, verifyTls: Boolean(o.verify_certificate), agent: makeAgent(o.verify_certificate) };
+    if (optionsError) console.error(`Configuration: ${optionsError}`);
+  } else {
+    const s = readJsonFile(config.settingsFile);
     if (s.unifiUrl && s.unifiApiKey) router = { url: s.unifiUrl, key: s.unifiApiKey, verifyTls: Boolean(s.verifyTls), agent: makeAgent(s.verifyTls) };
   }
-} catch (e) {
-  console.error(`Ignoring unreadable ${config.settingsFile}: ${e.message}`);
 }
 
 function unifi(method, apiPath, body, conn = router) {
-  if (!conn) return Promise.reject(fail(409, 'The router is not set up yet'));
+  if (!conn) return Promise.reject(fail(409, optionsError ? `${optionsError} Fix it on the add-on's Configuration tab.` : 'The router is not set up yet'));
   const url = new URL(`${conn.url}/proxy/network/integration${apiPath}`);
   const payload = body === undefined ? undefined : JSON.stringify(body);
   return new Promise((resolve, reject) => {
@@ -105,12 +135,9 @@ function siteId() {
 
 // Tries the address and key against the router; saves them only if the router accepts them.
 async function saveSetup({ unifiUrl, apiKey, verifyTls }) {
-  let url = null;
-  if (typeof unifiUrl === 'string' && unifiUrl.trim()) {
-    const raw = unifiUrl.trim();
-    try { url = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`); } catch { /* invalid */ }
-  }
-  if (!url || url.protocol !== 'https:' || !url.hostname) throw fail(400, "Enter the router's address, for example 192.168.1.1");
+  const origin = routerOrigin(unifiUrl);
+  if (!origin) throw fail(400, "Enter the router's address, for example 192.168.1.1");
+  const url = new URL(origin);
   if (typeof apiKey !== 'string' || apiKey.trim().length < 8 || apiKey.length > 200) throw fail(400, 'Enter the API key from the UniFi console');
 
   const candidate = { url: url.origin, key: apiKey.trim(), verifyTls: Boolean(verifyTls), agent: makeAgent(verifyTls) };
@@ -228,11 +255,15 @@ async function handle(req, res) {
 
   if (route === 'GET /api/config') {
     // The API key is never sent back, only the router's address.
-    return send(res, 200, { user, lifetimes: LIFETIMES, maxCount: config.maxCount, needsSetup: !router, routerUrl: router?.url ?? '', verifyTls: router?.verifyTls ?? false });
+    return send(res, 200, {
+      user, lifetimes: LIFETIMES, maxCount: config.maxCount, routerUrl: router?.url ?? '', verifyTls: router?.verifyTls ?? false,
+      managed, optionsError, needsSetup: !router && !managed,
+    });
   }
 
   if (route === 'POST /api/setup') {
     if (!isTrustedWrite(req)) return send(res, 403, { error: 'Forbidden' });
+    if (managed) throw fail(409, "The router is set on the add-on's Configuration tab");
     await saveSetup(await readJson(req));
     console.log(JSON.stringify({ event: 'router.configured', by: user.name, url: router.url }));
     return send(res, 200, { ok: true, routerUrl: router.url });
@@ -290,8 +321,10 @@ http.createServer((req, res) => {
     if (err.expose) return send(res, err.status, { error: err.message });
     console.error(err.message);
     const s = err.upstreamStatus;
-    send(res, 502, { error: s === 401 || s === 403 ? 'The router no longer accepts the API key. Update it under Router settings' : 'Could not reach the router' });
+    const where = managed ? "on the add-on's Configuration tab" : 'under Router settings';
+    if (/certificate|self.signed|CERT_/i.test(`${err.code} ${err.message}`)) return send(res, 502, { error: `The router's certificate could not be verified. Turn off certificate verification ${where}` });
+    send(res, 502, { error: s === 401 || s === 403 ? `The router does not accept the API key. Update it ${managed ? "on the add-on's Configuration tab" : 'under Router settings'}` : `Could not reach the router${router ? ` at ${new URL(router.url).host}` : ''}` });
   });
 }).listen(config.port, config.host, () => {
-  console.log(`guest-wifi listening on http://${config.host}:${config.port} (${router ? `router ${router.url}` : 'router not set up yet'})`);
+  console.log(`guest-wifi listening on http://${config.host}:${config.port} (${router ? `router ${router.url}, from ${managed ? 'the Configuration tab' : 'in-app setup'}` : 'router not set up yet'})`);
 });

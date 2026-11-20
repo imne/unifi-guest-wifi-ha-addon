@@ -113,6 +113,10 @@ input.plain { background-image: none; padding-right: 16px; }
 .setup-actions { display: flex; gap: 12px; justify-content: flex-end; align-items: center; }
 .setup-actions .primary { min-width: 180px; height: 48px; font-size: 17px; }
 
+.notice { max-width: 560px; border-color: var(--danger); }
+.notice h2 { margin: 0 0 10px; font-size: 20px; }
+.notice p { margin: 0 0 8px; line-height: 1.5; }
+
 /* Result */
 .result-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .ok { width: 52px; height: 52px; border-radius: 50%; background: var(--ok-bg); color: var(--ok); display: grid; place-items: center; }

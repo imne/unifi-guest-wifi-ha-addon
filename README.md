@@ -6,8 +6,8 @@ Generate guest WiFi tokens (UniFi hotspot vouchers) from the Home Assistant side
   first login), optionally how many devices per token and a note.
 - Copy one or all codes, download a CSV, or print cut-out cards for guests.
 - See recent tokens (unused / in use / expired) and revoke any of them.
-- On first use the app asks for your router's address and a UniFi API key, checks them
-  against the router, and remembers them.
+- Set your router's address and a UniFi API key on the add-on's Configuration tab, or leave
+  them empty and the app asks for them on first use.
 
 Works with UniFi consoles that have the Network integration API (UniFi Network 9 or later).
 
@@ -16,8 +16,9 @@ Works with UniFi consoles that have the Network integration API (UniFi Network 9
 1. Home Assistant → Settings → Add-ons → Add-on Store → ⋮ → **Repositories**, add
    `https://github.com/imne/unifi-guest-wifi-ha-addon`.
 2. Install **Guest WiFi Manager**, start it, and turn on **Show in sidebar**.
-3. Open **Guest WiFi** and enter the router's address and API key
-   (UniFi Network → Settings → Control Plane → Integrations → Create API Key).
+3. Enter the router's address and API key on the **Configuration** tab (or leave them empty
+   and enter them in the app). The key comes from UniFi Network → Settings → Control Plane →
+   Integrations → Create API Key.
 
 Without GitHub: copy the `guest_wifi` folder to `/addons/guest_wifi` on the Home Assistant
 machine (Samba or SSH add-on), then Add-on Store → ⋮ → Check for updates; it appears under
@@ -33,14 +34,15 @@ browser ──► Home Assistant (login, ingress proxy)
 - `guest_wifi/server.js`: Node 22, no dependencies. Only Home Assistant's ingress proxy may
   connect; it supplies the signed-in user. Writes need a custom header (CSRF protection).
 - `guest_wifi/public/`: the UI (plain HTML/CSS/JS, light and dark mode).
-- The router's address and API key live in the add-on's private `/data/settings.json`.
+- The router's address and API key come from the add-on's options (`/data/options.json`),
+  or from the in-app setup (`/data/settings.json`) when the options are empty.
 - By default only Home Assistant administrators see the panel (`panel_admin` in
   `guest_wifi/config.yaml`).
 
 ## Test without Home Assistant
 
 ```bash
-SETTINGS_FILE=/tmp/guest-wifi-settings.json ALLOWED_CLIENT_IPS=127.0.0.1 HOST=127.0.0.1 node guest_wifi/server.js
+OPTIONS_FILE=/tmp/guest-wifi-options.json SETTINGS_FILE=/tmp/guest-wifi-settings.json ALLOWED_CLIENT_IPS=127.0.0.1 HOST=127.0.0.1 node guest_wifi/server.js
 ```
 
 ```bash

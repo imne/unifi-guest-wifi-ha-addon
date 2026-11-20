@@ -5,11 +5,21 @@ Generate guest WiFi tokens (UniFi hotspot vouchers) from the Home Assistant side
 ## Setup
 
 1. In UniFi Network: Settings → Control Plane → Integrations → **Create API Key**.
-2. Start the add-on and open **Guest WiFi** in the sidebar.
-3. The first time, the app asks for your router's address (for example `192.168.1.1`)
-   and the API key. It checks them against the router before saving.
+2. On the add-on's **Configuration** tab, fill in:
+   - **Router address**: your UniFi console, for example `192.168.1.1`
+   - **API key**: the key from step 1
+   - **Verify the router's certificate**: leave off for a console with its built-in
+     self-signed certificate
+3. Save, start (or restart) the add-on, and open **Guest WiFi** in the sidebar.
 
-To change them later, use **Router settings** at the top of the page.
+### Or set it up in the app
+
+Leave the router address and API key empty on the Configuration tab. The app then asks for
+them the first time you open it, checks them against the router, and remembers them. Change
+them later with **Router settings** at the top of the page.
+
+Values on the Configuration tab always win; while they are set, the app has no
+"Router settings" link.
 
 ## Who can use it
 
@@ -21,7 +31,8 @@ administrators see it (`panel_admin: true` in `config.yaml`).
 - A token's lifetime counts from the guest's first login, not from when it is generated.
 - Only tokens made by this app (note starting with `guest-wifi`) are listed or can be revoked.
 - Home Assistant must be able to reach the UniFi console on port 443.
-- The address and API key are stored in the add-on's private data folder
-  (`/data/settings.json`); the key is never shown again in the app.
+- The address and API key stay on your Home Assistant machine (the add-on's
+  configuration, or its private data folder when entered in the app); the key is never
+  shown in the app.
 - "Verify the router's certificate" should stay off for a console with its built-in
   self-signed certificate.

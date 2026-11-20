@@ -218,8 +218,13 @@ $('#setup').addEventListener('submit', async (e) => {
     const cfg = await api('GET', 'api/config');
     state.routerUrl = cfg.routerUrl || '';
     state.verifyTls = Boolean(cfg.verifyTls);
-    $('#open-setup').hidden = false;
-    if (cfg.needsSetup) showSetup(true, { first: true });
+    // Set on the add-on's Configuration tab: nothing to change in the app
+    $('#open-setup').hidden = Boolean(cfg.managed);
+    if (cfg.optionsError) {
+      $('#notice-text').textContent = cfg.optionsError;
+      $('#notice').hidden = false;
+      for (const id of ['#generator', '#recent-card']) $(id).hidden = true;
+    } else if (cfg.needsSetup) showSetup(true, { first: true });
     state.lifetimes = cfg.lifetimes;
     state.maxCount = cfg.maxCount;
     $('#count').max = cfg.maxCount;
@@ -230,5 +235,5 @@ $('#setup').addEventListener('submit', async (e) => {
     $('#error').textContent = ex.message;
     $('#error').hidden = false;
   }
-  if ($('#setup').hidden) loadRecent();
+  if ($('#setup').hidden && $('#notice').hidden) loadRecent();
 })();

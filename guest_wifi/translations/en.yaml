@@ -1,0 +1,14 @@
+configuration:
+  router_address:
+    name: Router address
+    description: >-
+      Address of your UniFi console, for example 192.168.1.1. Leave this and the API key
+      empty to enter them in the app instead.
+  api_key:
+    name: API key
+    description: >-
+      From UniFi Network → Settings → Control Plane → Integrations → Create API Key.
+  verify_certificate:
+    name: Verify the router's certificate
+    description: >-
+      Leave off for a console that uses its built-in self-signed certificate.
