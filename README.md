@@ -8,7 +8,8 @@ Generate guest WiFi tokens (UniFi hotspot vouchers) from the Home Assistant side
 - See recent tokens (unused / in use / expired) and revoke any of them.
 - **Automations**: a script blueprint creates tokens and returns the code to your
   automation (send it in a notification, show it on a display, ...).
-- **Dashboard card**: shows the latest token and makes a new one with one tap.
+- **Dashboard card**: shows the latest token, makes a new one with one tap, and can list a
+  history of tokens with their status (unused, in use, expired).
 - Set your router's address and a UniFi API key on the add-on's Configuration tab, or leave
   them empty and the app asks for them on first use.
 

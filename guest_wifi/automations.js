@@ -7,6 +7,10 @@
 // - updates  sensor.guest_wifi_last_token  (state = first code; attributes: codes,
 //   request_id, error, ...), and
 // - fires  guest_wifi_tokens_generated  (or  guest_wifi_generate_failed  with "error").
+// It also keeps  sensor.guest_wifi_tokens  current (state = number of unused tokens;
+// attribute "tokens" = the newest tokens with their status: unused, in_use or expired),
+// refreshed every minute and after every change. The dashboard card's history reads it.
+//
 // The script blueprint in the repository wraps this so an automation gets the code back
 // as the action's response.
 //
@@ -31,6 +35,9 @@ const REQUEST_EVENT = 'guest_wifi_generate';
 const DONE_EVENT = 'guest_wifi_tokens_generated';
 const FAILED_EVENT = 'guest_wifi_generate_failed';
 const SENSOR = 'sensor.guest_wifi_last_token';
+const TOKENS_SENSOR = 'sensor.guest_wifi_tokens';
+const TOKENS_KEPT = 10;                       // newest tokens published to Home Assistant
+const REFRESH_MS = Number(env('TOKENS_REFRESH_SECONDS', '60')) * 1000;
 
 const CARD = {
   source: path.join(path.dirname(fileURLToPath(import.meta.url)), 'card', 'guest-wifi-card.js'),
@@ -53,8 +60,8 @@ function installCardFile() {
 const fmtCode = (c) => (/^\d{10}$/.test(String(c)) ? `${String(c).slice(0, 5)}-${String(c).slice(5)}` : String(c));
 const log = (msg) => console.log(`automations: ${msg}`);
 
-export function startAutomations({ createVouchers, describeError, dashboardCard = true, version = '0' }) {
-  if (!HA.token) { log('off (not running under Home Assistant)'); return; }
+export function startAutomations({ createVouchers, listVouchers, describeError, isConfigured, voucherPrefix = 'guest-wifi', dashboardCard = true, version = '0' }) {
+  if (!HA.token) { log('off (not running under Home Assistant)'); return null; }
 
   let lastCode = 'unknown';
   const recent = [];   // [timestamp, count] of tokens made through automations in the last hour
@@ -82,6 +89,44 @@ export function startAutomations({ createVouchers, describeError, dashboardCard 
     await api('POST', `/events/${result.error ? FAILED_EVENT : DONE_EVENT}`, result).catch((e) => log(e.message));
   }
 
+  // Publishes the newest tokens and whether each has been used. Never throws.
+  let refreshing = false;
+  let lastTokensJson = '';
+  async function refreshTokens() {
+    if (refreshing || !isConfigured()) return;
+    refreshing = true;
+    try {
+      const { vouchers } = await listVouchers(TOKENS_KEPT);
+      const tokens = vouchers.map((v) => ({
+        code: fmtCode(v.code),
+        status: v.expired ? 'expired' : v.activatedAt ? 'in_use' : 'unused',
+        lifetime_minutes: v.timeLimitMinutes,
+        devices: v.authorizedGuestLimit ?? null,
+        devices_used: v.authorizedGuestCount ?? 0,
+        note: String(v.name || '').replace(new RegExp(`^${voucherPrefix}\\s*`), ''),
+        created_at: v.createdAt,
+        first_used_at: v.activatedAt,
+        expires_at: v.expiresAt,
+      }));
+      const json = JSON.stringify(tokens);
+      if (json === lastTokensJson) return;   // nothing changed: don't fill Home Assistant's history
+      const count = (s) => tokens.filter((t) => t.status === s).length;
+      await api('POST', `/states/${TOKENS_SENSOR}`, {
+        state: String(count('unused')),
+        attributes: {
+          friendly_name: 'Guest WiFi tokens', icon: 'mdi:wifi-star', unit_of_measurement: 'unused',
+          tokens, unused: count('unused'), in_use: count('in_use'), expired: count('expired'),
+        },
+      });
+      lastTokensJson = json;
+    } catch (e) {
+      log(`could not refresh the token list: ${e.expose ? e.message : describeError(e)}`);
+    } finally {
+      refreshing = false;
+    }
+  }
+  setInterval(refreshTokens, REFRESH_MS).unref?.();
+
   async function onRequest(data) {
     const d = data && typeof data === 'object' ? data : {};
     const request_id = d.request_id == null ? null : String(d.request_id).slice(0, 100);
@@ -101,6 +146,7 @@ export function startAutomations({ createVouchers, describeError, dashboardCard 
       lastCode = codes[0] ?? lastCode;
       await publish({ request_id, code: codes[0] ?? null, codes, count: codes.length, lifetime_minutes: Number(lifetime_minutes), devices: Number(devices), note: String(d.note ?? '').slice(0, 40) });
       log(`created ${codes.length} token(s)`);
+      refreshTokens();
     } catch (err) {
       const error = describeError(err);
       if (!err.expose) console.error(err.message);
@@ -152,6 +198,8 @@ export function startAutomations({ createVouchers, describeError, dashboardCard 
         call('subscribe_events', { event_type: REQUEST_EVENT })
           .then(() => log(`listening for the ${REQUEST_EVENT} event`), (e) => log(`could not subscribe: ${e.message}`));
         installCard(call);
+        lastTokensJson = '';   // Home Assistant forgets these sensors when it restarts
+        refreshTokens();
         ping = setInterval(() => { if (ws.readyState === 1) call('ping').catch(() => ws.close()); }, 30000);
       } else if ((msg.type === 'result' || msg.type === 'pong') && waiting.has(msg.id)) {
         const w = waiting.get(msg.id);
@@ -172,4 +220,5 @@ export function startAutomations({ createVouchers, describeError, dashboardCard 
     ws.addEventListener('error', () => { /* 'close' follows and retries */ });
   }
   connect();
+  return { refreshTokens };
 }

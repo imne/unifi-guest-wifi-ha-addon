@@ -65,6 +65,7 @@ function readJsonFile(file) {
 let router = null;        // { url, key, verifyTls, agent } once known
 // managed: the Configuration tab has values, so they win and the in-app setup is off.
 // optionsError: what is wrong with those values, shown in the app.
+let homeAssistant = null;   // set at the bottom: { refreshTokens() } when running under Home Assistant
 let dashboardCard = true;   // option dashboard_card: install the dashboard card
 let managed = false;
 let optionsError = '';
@@ -174,6 +175,16 @@ const publicVoucher = (v) => ({
   authorizedGuestLimit: v.authorizedGuestLimit ?? null,
   authorizedGuestCount: v.authorizedGuestCount ?? 0,
 });
+
+// The newest vouchers made by this app (name starts with the prefix), newest first.
+async function listVouchers(limit = 50) {
+  const sid = await siteId();
+  const filter = `name.like('${config.voucherPrefix}*')`;
+  // Ask for as many as the router gives at once, then sort: it does not return them newest first
+  const page = await unifi('GET', `/v1/sites/${sid}/hotspot/vouchers?limit=200&filter=${encodeURIComponent(filter)}`);
+  const vouchers = page.data.map(publicVoucher).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  return { vouchers, totalCount: page.totalCount };
+}
 
 // Creates vouchers on the router. Used by the page and by automations; validates everything.
 async function createVouchers({ count = 1, minutes, guests = 1, note = '', by }) {
@@ -300,17 +311,14 @@ async function handle(req, res) {
     if (managed) throw fail(409, "The router is set on the add-on's Configuration tab");
     await saveSetup(await readJson(req));
     console.log(JSON.stringify({ event: 'router.configured', by: user.name, url: router.url }));
+    homeAssistant?.refreshTokens();
     return send(res, 200, { ok: true, routerUrl: router.url });
   }
 
   if (route === 'GET /api/vouchers') {
-    const sid = await siteId();
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200);
-    // Only show vouchers made by this app (name starts with the prefix).
-    const filter = `name.like('${config.voucherPrefix}*')`;
-    const page = await unifi('GET', `/v1/sites/${sid}/hotspot/vouchers?limit=${limit}&filter=${encodeURIComponent(filter)}`);
-    const vouchers = page.data.map(publicVoucher).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return send(res, 200, { vouchers, totalCount: page.totalCount });
+    const { vouchers, totalCount } = await listVouchers(limit);
+    return send(res, 200, { vouchers, totalCount });
   }
 
   if (route === 'POST /api/vouchers') {
@@ -321,6 +329,7 @@ async function handle(req, res) {
     const vouchers = await createVouchers({
       count: body.count, minutes: lifetime.minutes, guests: body.authorizedGuestLimit, note: body.note, by: user.name,
     });
+    homeAssistant?.refreshTokens();
     return send(res, 201, { vouchers, lifetime });
   }
 
@@ -335,6 +344,7 @@ async function handle(req, res) {
     if (!v?.name?.startsWith(config.voucherPrefix)) return send(res, 404, { error: 'Not found' });
     await unifi('DELETE', `/v1/sites/${sid}/hotspot/vouchers/${del[1]}`);
     console.log(JSON.stringify({ event: 'voucher.deleted', by: user.name, id: del[1] }));
+    homeAssistant?.refreshTokens();
     return send(res, 200, { ok: true });
   }
 
@@ -352,4 +362,7 @@ http.createServer((req, res) => {
 });
 
 // Lets Home Assistant automations create tokens (see automations.js)
-startAutomations({ createVouchers, describeError, dashboardCard, version: pkgVersion });
+homeAssistant = startAutomations({
+  createVouchers, listVouchers, describeError, dashboardCard, version: pkgVersion,
+  isConfigured: () => Boolean(router), voucherPrefix: config.voucherPrefix,
+});

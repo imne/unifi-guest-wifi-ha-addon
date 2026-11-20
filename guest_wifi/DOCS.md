@@ -53,21 +53,28 @@ wrong (then `wifi.code` is empty).
 Under the hood, for your own scripts: the add-on listens for the event
 `guest_wifi_generate` (data: `count`, `lifetime_minutes`, `devices`, `note`, `request_id`),
 then updates `sensor.guest_wifi_last_token` (state: the newest code; attributes: `codes`,
-`request_id`, `error`, ...) and fires `guest_wifi_tokens_generated` or
+`request_id`, `error`, ...), keeps `sensor.guest_wifi_tokens` current (state: number of
+unused tokens; attribute `tokens`: the newest ten with `status` unused / in_use / expired)
+and fires `guest_wifi_tokens_generated` or
 `guest_wifi_generate_failed`. As a safety net, automations can create at most 60 tokens
 per hour.
 
 ## Dashboard card
 
 The add-on installs a **Guest WiFi** card: it shows the latest token with a Copy button
-and makes a new one with one tap.
+and makes a new one with one tap. Below that it can list a **history** of the newest
+tokens, each marked **Unused**, **In use** (with the time it ends) or **Expired**. The
+**History** switch at the top of the card turns the list on or off; each browser
+remembers its own choice. The list refreshes about once a minute.
 
 1. Start the add-on. Its log says "dashboard card installed". If the log also asks for it,
    restart Home Assistant once (needed the first time Home Assistant gets a `www` folder).
 2. Edit a dashboard → Add card → search for **Guest WiFi** (reload the browser page if it
    is not listed).
 
-Card settings: title, default lifetime, devices per token, note, and **script**. Without a
+Card settings: title, default lifetime, devices per token, note, whether the history
+starts switched on (`show_history`), how many tokens it lists (`history_count`, up to 10),
+and **script**. Without a
 script only administrators can generate tokens from the card. To let other users do it,
 set the script you created from the blueprint above.
 
@@ -84,6 +91,8 @@ administrators see it (`panel_admin: true` in `config.yaml`).
 ## Good to know
 
 - A token's lifetime counts from the guest's first login, not from when it is generated.
+- Token codes appear in the two sensors above, so anyone who can see entities in your Home
+  Assistant can read them.
 - Only tokens made by this app (note starting with `guest-wifi`) are listed or can be revoked.
 - Home Assistant must be able to reach the UniFi console on port 443.
 - The address and API key stay on your Home Assistant machine (the add-on's
