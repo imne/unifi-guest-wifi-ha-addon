@@ -73,3 +73,12 @@ update.
    permission or behaviour to know about ("Good to know: ...").
 3. Run `dev/check-release.sh`; it fails if the versions differ or the notes are missing.
 4. Push. Home Assistant offers the update and shows the notes.
+5. Tag the commit and publish a GitHub release with the same notes, so every version is
+   listed under Releases:
+
+   ```bash
+   git tag -a v1.3.3 -m "Unifi Guest Wi-Fi Voucher Generator 1.3.3" && git push origin v1.3.3
+   ```
+
+   Then GitHub → Releases → Draft a new release: pick the tag, use the version as the
+   title, and paste the output of `dev/release-notes.sh 1.3.3` as the description.
