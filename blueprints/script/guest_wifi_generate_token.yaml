@@ -1,7 +1,7 @@
 blueprint:
   name: Guest WiFi – generate token
   description: >-
-    Creates guest WiFi tokens with the Guest WiFi Manager add-on and returns them to
+    Creates guest WiFi tokens with the Unifi Guest Wi-Fi Voucher Generator add-on and returns them to
     whatever called this script. Call the script with "response_variable: wifi", then use
     {{ wifi.code }} (the first token) or {{ wifi.codes }} (all of them). If it fails,
     wifi.code is empty and wifi.error says why.
@@ -67,7 +67,7 @@ sequence:
   - variables:
       result: >-
         {% set answered = wait.completed %}
-        {% set error = state_attr('sensor.guest_wifi_last_token', 'error') if answered else 'The Guest WiFi Manager add-on did not answer. Is it running?' %}
+        {% set error = state_attr('sensor.guest_wifi_last_token', 'error') if answered else 'The Unifi Guest Wi-Fi Voucher Generator add-on did not answer. Is it running?' %}
         {% set codes = (state_attr('sensor.guest_wifi_last_token', 'codes') or []) if answered and not error else [] %}
         {{ {'code': codes[0] if codes else '', 'codes': codes, 'error': error or ''} }}
   - stop: Finished

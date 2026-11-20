@@ -1,4 +1,4 @@
-// Guest WiFi card for Home Assistant dashboards (installed by the Guest WiFi Manager add-on).
+// Guest WiFi card for Home Assistant dashboards (installed by the Unifi Guest Wi-Fi Voucher Generator add-on).
 // Shows the latest guest WiFi token and a button that generates a new one.
 //
 //   type: custom:guest-wifi-card
@@ -212,7 +212,7 @@ class GuestWifiCard extends HTMLElement {
         this._finish((res && res.response && res.response.error) || '');
       } else {
         this._pending = `card-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-        this._timer = setTimeout(() => this._finish('The Guest WiFi Manager add-on did not answer. Is it running?'), 30000);
+        this._timer = setTimeout(() => this._finish('The Unifi Guest Wi-Fi Voucher Generator add-on did not answer. Is it running?'), 30000);
         await this._hass.callApi('POST', `events/${EVENT}`, { ...data, request_id: this._pending });
       }
     } catch (err) {
@@ -242,5 +242,5 @@ class GuestWifiCard extends HTMLElement {
 if (!customElements.get('guest-wifi-card')) customElements.define('guest-wifi-card', GuestWifiCard);
 window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === 'guest-wifi-card')) {
-  window.customCards.push({ type: 'guest-wifi-card', name: 'Guest WiFi', description: 'Shows the latest guest WiFi token and generates new ones (Guest WiFi Manager add-on).', preview: true });
+  window.customCards.push({ type: 'guest-wifi-card', name: 'Guest WiFi', description: 'Shows the latest guest WiFi token and generates new ones (Unifi Guest Wi-Fi Voucher Generator add-on).', preview: true });
 }

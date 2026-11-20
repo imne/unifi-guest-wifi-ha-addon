@@ -1,4 +1,4 @@
 # Makes this repository a Home Assistant add-on repository (the add-on is in guest_wifi/)
-name: Guest WiFi Manager add-on
+name: Unifi Guest Wi-Fi Voucher Generator add-on
 url: https://github.com/imne/unifi-guest-wifi-ha-addon
 maintainer: imne

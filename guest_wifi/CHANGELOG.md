@@ -1,7 +1,15 @@
 # Changelog
 
-What changed in each version of Guest WiFi Manager, newest first. Home Assistant shows this
+What changed in each version of Unifi Guest Wi-Fi Voucher Generator, newest first. Home Assistant shows this
 when an update is offered and on the add-on's Changelog tab.
+
+## 1.3.2 (2026-11-20)
+
+- The add-on is now called **Unifi Guest Wi-Fi Voucher Generator** (it was "Guest WiFi
+  Manager"). Only the name shown in Home Assistant and on the add-on's page changed.
+- Nothing else is renamed: the **Guest WiFi** sidebar entry and dashboard card, the
+  sensors, the event names and your scripts and automations all keep working as they are.
+- Release notes: from this version on, every update lists what changed here.
 
 ## 1.3.1 (2026-11-20)
 

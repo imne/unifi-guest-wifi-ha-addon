@@ -1,6 +1,6 @@
 {
   "name": "unifi-guest-wifi-ha-addon",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "private": true,
   "description": "Home Assistant add-on: generate UniFi guest WiFi tokens (hotspot vouchers)",
   "type": "module",

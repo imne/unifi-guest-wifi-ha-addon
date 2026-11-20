@@ -1,4 +1,4 @@
-# Guest WiFi Manager
+# Unifi Guest Wi-Fi Voucher Generator
 
 Generate guest WiFi tokens (UniFi hotspot vouchers) from the Home Assistant sidebar.
 

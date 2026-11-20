@@ -1,4 +1,4 @@
-# Guest WiFi Manager: Home Assistant add-on
+# Unifi Guest Wi-Fi Voucher Generator: Home Assistant add-on
 
 Generate guest WiFi tokens (UniFi hotspot vouchers) from the Home Assistant sidebar.
 
@@ -19,7 +19,7 @@ Works with UniFi consoles that have the Network integration API (UniFi Network 9
 
 1. Home Assistant → Settings → Add-ons → Add-on Store → ⋮ → **Repositories**, add
    `https://github.com/imne/unifi-guest-wifi-ha-addon`.
-2. Install **Guest WiFi Manager**, start it, and turn on **Show in sidebar**.
+2. Install **Unifi Guest Wi-Fi Voucher Generator**, start it, and turn on **Show in sidebar**.
 3. Enter the router's address and API key on the **Configuration** tab (or leave them empty
    and enter them in the app). The key comes from UniFi Network → Settings → Control Plane →
    Integrations → Create API Key.

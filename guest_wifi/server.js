@@ -1,4 +1,4 @@
-// Guest WiFi Manager: Home Assistant add-on
+// Unifi Guest Wi-Fi Voucher Generator: Home Assistant add-on
 // Small HTTP server (no dependencies) that creates, lists and revokes UniFi hotspot
 // vouchers ("guest WiFi tokens").
 //
