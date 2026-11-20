@@ -4,5 +4,6 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json server.js automations.js ./
 COPY public ./public
+COPY card ./card
 EXPOSE 8099
 CMD ["node", "server.js"]

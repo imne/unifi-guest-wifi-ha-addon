@@ -9,6 +9,14 @@
 // - fires  guest_wifi_tokens_generated  (or  guest_wifi_generate_failed  with "error").
 // The script blueprint in the repository wraps this so an automation gets the code back
 // as the action's response.
+//
+// Dashboard card: unless turned off, the add-on also copies card/guest-wifi-card.js into
+// Home Assistant's www folder and registers it as a dashboard resource, so the
+// "Guest WiFi" card can be added to a dashboard.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const env = (name, fallback) => process.env[name] ?? fallback;
 
@@ -24,10 +32,28 @@ const DONE_EVENT = 'guest_wifi_tokens_generated';
 const FAILED_EVENT = 'guest_wifi_generate_failed';
 const SENSOR = 'sensor.guest_wifi_last_token';
 
+const CARD = {
+  source: path.join(path.dirname(fileURLToPath(import.meta.url)), 'card', 'guest-wifi-card.js'),
+  // Home Assistant's configuration folder as mounted into the add-on
+  configDir: env('HA_CONFIG_DIR', '/homeassistant'),
+  urlPath: '/local/guest-wifi-manager/guest-wifi-card.js',
+};
+
+// Copies the card into <config>/www. Returns { ok, createdWww }.
+function installCardFile() {
+  const www = path.join(CARD.configDir, 'www');
+  if (!fs.existsSync(CARD.configDir)) throw new Error(`Home Assistant's configuration folder is not available at ${CARD.configDir}`);
+  const createdWww = !fs.existsSync(www);
+  const dir = path.join(www, 'guest-wifi-manager');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.copyFileSync(CARD.source, path.join(dir, 'guest-wifi-card.js'));
+  return { createdWww };
+}
+
 const fmtCode = (c) => (/^\d{10}$/.test(String(c)) ? `${String(c).slice(0, 5)}-${String(c).slice(5)}` : String(c));
 const log = (msg) => console.log(`automations: ${msg}`);
 
-export function startAutomations({ createVouchers, describeError }) {
+export function startAutomations({ createVouchers, describeError, dashboardCard = true, version = '0' }) {
   if (!HA.token) { log('off (not running under Home Assistant)'); return; }
 
   let lastCode = 'unknown';
@@ -83,12 +109,39 @@ export function startAutomations({ createVouchers, describeError }) {
     }
   }
 
+  // Makes the card available to dashboards: file in www + a dashboard resource entry.
+  let cardDone = false;
+  async function installCard(call) {
+    if (!dashboardCard || cardDone) return;
+    try {
+      const { createdWww } = installCardFile();
+      const url = `${CARD.urlPath}?v=${version}`;
+      const resources = await call('lovelace/resources');
+      const mine = (resources || []).find((r) => String(r.url).split('?')[0] === CARD.urlPath);
+      if (!mine) await call('lovelace/resources/create', { res_type: 'module', url });
+      else if (mine.url !== url) await call('lovelace/resources/update', { resource_id: mine.id, url });
+      cardDone = true;
+      log(`dashboard card installed (${mine ? (mine.url !== url ? 'updated' : 'already registered') : 'registered'}): add the "Guest WiFi" card to a dashboard`);
+      if (createdWww) log('Home Assistant only serves its www folder after a restart: restart Home Assistant once so the card can load');
+    } catch (e) {
+      log(`could not install the dashboard card automatically: ${e.message}. See the add-on's documentation to add it by hand`);
+    }
+  }
+
   let retryMs = 2000;
   function connect() {
     let ws;
     try { ws = new WebSocket(HA.wsUrl); }
     catch (e) { log(`cannot connect: ${e.message}`); return setTimeout(connect, 30000); }
     let ping;
+    let nextId = 1;
+    const waiting = new Map();   // id -> { resolve, reject }
+    const call = (type, payload = {}) => new Promise((resolve, reject) => {
+      const id = nextId++;
+      waiting.set(id, { resolve, reject });
+      ws.send(JSON.stringify({ id, type, ...payload }));
+      setTimeout(() => { if (waiting.delete(id)) reject(new Error(`${type} timed out`)); }, 15000);
+    });
     ws.addEventListener('message', (m) => {
       let msg;
       try { msg = JSON.parse(m.data); } catch { return; }
@@ -96,17 +149,23 @@ export function startAutomations({ createVouchers, describeError }) {
       else if (msg.type === 'auth_invalid') { log(`Home Assistant refused the add-on's token: ${msg.message}`); ws.close(); }
       else if (msg.type === 'auth_ok') {
         retryMs = 2000;
-        ws.send(JSON.stringify({ id: 1, type: 'subscribe_events', event_type: REQUEST_EVENT }));
-        let id = 2;
-        ping = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ id: id++, type: 'ping' })); }, 30000);
-      } else if (msg.type === 'result' && msg.id === 1) {
-        log(msg.success ? `listening for the ${REQUEST_EVENT} event` : `could not subscribe: ${msg.error?.message}`);
+        call('subscribe_events', { event_type: REQUEST_EVENT })
+          .then(() => log(`listening for the ${REQUEST_EVENT} event`), (e) => log(`could not subscribe: ${e.message}`));
+        installCard(call);
+        ping = setInterval(() => { if (ws.readyState === 1) call('ping').catch(() => ws.close()); }, 30000);
+      } else if ((msg.type === 'result' || msg.type === 'pong') && waiting.has(msg.id)) {
+        const w = waiting.get(msg.id);
+        waiting.delete(msg.id);
+        if (msg.type === 'pong' || msg.success) w.resolve(msg.result);
+        else w.reject(new Error(msg.error?.message || 'request failed'));
       } else if (msg.type === 'event' && msg.event?.event_type === REQUEST_EVENT) {
         onRequest(msg.event.data);
       }
     });
     ws.addEventListener('close', () => {
       clearInterval(ping);
+      for (const w of waiting.values()) w.reject(new Error('connection closed'));
+      waiting.clear();
       setTimeout(connect, retryMs);
       retryMs = Math.min(retryMs * 2, 60000);
     });

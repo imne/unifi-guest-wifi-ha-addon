@@ -6,6 +6,9 @@ Generate guest WiFi tokens (UniFi hotspot vouchers) from the Home Assistant side
   first login), optionally how many devices per token and a note.
 - Copy one or all codes, download a CSV, or print cut-out cards for guests.
 - See recent tokens (unused / in use / expired) and revoke any of them.
+- **Automations**: a script blueprint creates tokens and returns the code to your
+  automation (send it in a notification, show it on a display, ...).
+- **Dashboard card**: shows the latest token and makes a new one with one tap.
 - Set your router's address and a UniFi API key on the add-on's Configuration tab, or leave
   them empty and the app asks for them on first use.
 
@@ -24,6 +27,9 @@ Without GitHub: copy the `guest_wifi` folder to `/addons/guest_wifi` on the Home
 machine (Samba or SSH add-on), then Add-on Store → ⋮ → Check for updates; it appears under
 "Local add-ons".
 
+Automations and the dashboard card are described on the add-on's **Documentation** tab
+([guest_wifi/DOCS.md](guest_wifi/DOCS.md)).
+
 ## How it works
 
 ```
@@ -33,6 +39,9 @@ browser ──► Home Assistant (login, ingress proxy)
 
 - `guest_wifi/server.js`: Node 22, no dependencies. Only Home Assistant's ingress proxy may
   connect; it supplies the signed-in user. Writes need a custom header (CSRF protection).
+- `guest_wifi/automations.js`: listens for the `guest_wifi_generate` event, publishes
+  `sensor.guest_wifi_last_token`, installs the dashboard card (`guest_wifi/card/`).
+- `blueprints/script/`: script blueprint that returns the code to an automation.
 - `guest_wifi/public/`: the UI (plain HTML/CSS/JS, light and dark mode).
 - The router's address and API key come from the add-on's options (`/data/options.json`),
   or from the in-app setup (`/data/settings.json`) when the options are empty.

@@ -65,10 +65,12 @@ function readJsonFile(file) {
 let router = null;        // { url, key, verifyTls, agent } once known
 // managed: the Configuration tab has values, so they win and the in-app setup is off.
 // optionsError: what is wrong with those values, shown in the app.
+let dashboardCard = true;   // option dashboard_card: install the dashboard card
 let managed = false;
 let optionsError = '';
 {
   const o = readJsonFile(config.optionsFile);
+  if (o.dashboard_card === false) dashboardCard = false;
   const address = String(o.router_address ?? '').trim();
   const key = String(o.api_key ?? '').trim();
   managed = Boolean(address || key);
@@ -259,6 +261,8 @@ function isTrustedWrite(req) {
     && (req.headers['content-type'] || '').startsWith('application/json');
 }
 
+const pkgVersion = readJsonFile(path.join(path.dirname(fileURLToPath(import.meta.url)), 'package.json')).version || '0';
+
 // --- Static files -------------------------------------------------------------
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
@@ -348,4 +352,4 @@ http.createServer((req, res) => {
 });
 
 // Lets Home Assistant automations create tokens (see automations.js)
-startAutomations({ createVouchers, describeError });
+startAutomations({ createVouchers, describeError, dashboardCard, version: pkgVersion });
