@@ -13,13 +13,14 @@
 // The history lists the newest tokens and whether each is unused, in use or expired. The
 // "History" switch on the card turns it on or off; each browser remembers its choice.
 //
-// Without "script" the card asks the add-on directly, which Home Assistant only allows
-// for administrators. With "script" (the blueprint script from the add-on's repository)
-// any user who may run that script can generate tokens.
+// The card generates through a script, which every Home Assistant user may run: the one
+// set as "script", or script.guest_wifi_generate_token, which the add-on creates. Without
+// either it asks the add-on directly, which Home Assistant only allows for administrators.
 
 const SENSOR = 'sensor.guest_wifi_last_token';
 const TOKENS_SENSOR = 'sensor.guest_wifi_tokens';
 const EVENT = 'guest_wifi_generate';
+const DEFAULT_SCRIPT = 'script.guest_wifi_generate_token';
 const STATUS = { unused: 'Unused', in_use: 'In use', expired: 'Expired' };
 const LIFETIMES = [[60, '1 hour'], [240, '4 hours'], [1440, '1 day'], [4320, '3 days'], [10080, '1 week'], [43200, '30 days']];
 const lifetimeLabel = (min) => (LIFETIMES.find(([m]) => m === Number(min)) || [0, `${min} min`])[1];
@@ -38,7 +39,7 @@ class GuestWifiCard extends HTMLElement {
         { name: 'show_history', selector: { boolean: {} } },
         { name: 'history_count', selector: { number: { min: 1, max: 10, mode: 'box' } } },
       ],
-      computeLabel: (s) => ({ title: 'Title', lifetime_minutes: 'Default lifetime', devices: 'Devices per token', note: 'Note', script: 'Script (lets non-administrators generate)', show_history: 'History switched on to start with', history_count: 'Tokens in the history' }[s.name]),
+      computeLabel: (s) => ({ title: 'Title', lifetime_minutes: 'Default lifetime', devices: 'Devices per token', note: 'Note', script: 'Script to generate with (optional)', show_history: 'History switched on to start with', history_count: 'Tokens in the history' }[s.name]),
     };
   }
 
@@ -207,8 +208,9 @@ class GuestWifiCard extends HTMLElement {
     this._update();
     const data = { count: 1, lifetime_minutes: this._lifetime, devices: Number(this._config.devices) || 1, note: this._config.note || '' };
     try {
-      if (this._config.script) {
-        const res = await this._hass.callService('script', String(this._config.script).replace(/^script\./, ''), data, undefined, false, true);
+      const script = this._config.script || (this._hass.states[DEFAULT_SCRIPT] ? DEFAULT_SCRIPT : '');
+      if (script) {
+        const res = await this._hass.callService('script', String(script).replace(/^script\./, ''), data, undefined, false, true);
         this._finish((res && res.response && res.response.error) || '');
       } else {
         this._pending = `card-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -218,7 +220,7 @@ class GuestWifiCard extends HTMLElement {
     } catch (err) {
       const unauthorized = err && (err.status_code === 401 || err.code === 'unauthorized' || /unauthor/i.test(String(err.message || err.body?.message || '')));
       this._finish(unauthorized
-        ? 'Only administrators can generate tokens from this card. Ask an administrator to set "script" in the card\'s settings.'
+        ? 'Only administrators can generate tokens from this card right now. Ask one to turn on "Create the token script" in the add-on\'s configuration.'
         : `Could not generate a token: ${err && (err.message || err.body?.message) || 'unknown error'}`);
     }
   }

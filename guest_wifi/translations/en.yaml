@@ -17,3 +17,13 @@ configuration:
     description: >-
       Copies the "Guest WiFi" card into Home Assistant's www folder and registers it, so it
       can be added to a dashboard.
+  create_script:
+    name: Create the token script
+    description: >-
+      Creates script.guest_wifi_generate_token if it does not exist. It lets users who are
+      not administrators generate tokens from the dashboard card, and automations can call it.
+  admins_only:
+    name: Administrators only
+    description: >-
+      Only Home Assistant administrators can open Guest WiFi and generate tokens. Turns off
+      the token script.

@@ -90,8 +90,9 @@ The card shows the latest token with a Copy button and makes a new one with one 
 
 ![The Guest WiFi dashboard card showing the latest token and a history of recent ones](blog/images/05-dashboard-card.jpg)
 
-Only administrators can generate tokens from the card unless you set its **script**
-setting; see step 7.
+Every Home Assistant user can use the card and the **Guest WiFi** sidebar entry. Only
+administrators can connect or change the router. To limit everything to administrators,
+turn on **Administrators only** on the add-on's Configuration tab.
 
 ### 7. Use it in automations (optional)
 
@@ -117,8 +118,8 @@ setting; see step 7.
    ```
 
 `wifi.code` is the first token, `wifi.codes` all of them, and `wifi.error` says what went
-wrong. To let non-administrators generate tokens from the dashboard card, pick this script
-in the card's settings.
+wrong. The add-on also creates a ready-made `script.guest_wifi_generate_token` that works
+the same way, so the blueprint is only needed if you want your own variant.
 
 More detail on every option is on the add-on's **Documentation** tab
 ([guest_wifi/DOCS.md](guest_wifi/DOCS.md)). What changed in each version is in the
@@ -154,8 +155,9 @@ browser ──► Home Assistant (login, ingress proxy)
 - `guest_wifi/public/`: the UI (plain HTML/CSS/JS, light and dark mode).
 - The router's address and API key come from the add-on's options (`/data/options.json`),
   or from the in-app setup (`/data/settings.json`) when the options are empty.
-- By default only Home Assistant administrators see the panel (`panel_admin` in
-  `guest_wifi/config.yaml`).
+- Every Home Assistant user sees the panel; the add-on asks Home Assistant who is an
+  administrator and lets only them change the router connection. The option `admins_only`
+  limits the whole add-on to administrators.
 
 ### Test without Home Assistant
 

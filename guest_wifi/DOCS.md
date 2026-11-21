@@ -74,9 +74,7 @@ remembers its own choice. The list refreshes about once a minute.
 
 Card settings: title, default lifetime, devices per token, note, whether the history
 starts switched on (`show_history`), how many tokens it lists (`history_count`, up to 10),
-and **script**. Without a
-script only administrators can generate tokens from the card. To let other users do it,
-set the script you created from the blueprint above.
+and **script** (only needed if you want the card to use your own script).
 
 The card is copied to `www/guest-wifi-manager/` in your Home Assistant configuration and
 registered under Settings → Dashboards → ⋮ → Resources. Turn off "Install the dashboard
@@ -85,8 +83,17 @@ the resource yourself: `/local/guest-wifi-manager/guest-wifi-card.js`, type `mod
 
 ## Who can use it
 
-Whoever is signed in to Home Assistant and can see the panel. By default only
-administrators see it (`panel_admin: true` in `config.yaml`).
+Every Home Assistant user can open **Guest WiFi** in the sidebar and use the dashboard
+card: generate tokens, see recent ones and revoke them. Only administrators can connect
+or change the router.
+
+- The dashboard card generates through `script.guest_wifi_generate_token`, which the add-on
+  creates if it does not exist. Turn off **Create the token script** on the Configuration
+  tab if you do not want that; then only administrators can generate from the card, unless
+  you set your own script in the card's settings.
+- Turn on **Administrators only** on the Configuration tab to limit the add-on to
+  administrators. Other users then get a short notice instead of the page, and the card
+  and the script refuse their requests.
 
 ## Good to know
 

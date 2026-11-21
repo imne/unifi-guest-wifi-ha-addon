@@ -3,6 +3,26 @@
 What changed in each version of Unifi Guest Wi-Fi Voucher Generator, newest first. Home Assistant shows this
 when an update is offered and on the add-on's Changelog tab.
 
+## 1.4.0 (2026-11-21)
+
+- **Everyone can generate tokens**, not only administrators.
+  - The **Guest WiFi** sidebar entry is now shown to every Home Assistant user. They can
+    generate tokens, see recent ones and revoke them.
+  - The dashboard card works for everyone without any setup. The add-on creates
+    `script.guest_wifi_generate_token` for this, and the card uses it automatically.
+- **Only administrators can connect or change the router.** Other users see no "Router
+  settings" link, and a short notice if the router is not connected yet.
+- New option **Administrators only**: turn it on to keep the old behaviour, where only
+  administrators can open Guest WiFi and generate tokens.
+- New option **Create the token script** (on by default).
+
+**Good to know:** the sidebar entry is visible to all users from this version on. If you
+do not want that, turn on **Administrators only** on the Configuration tab.
+
+**After updating:** restart the add-on, then reload the dashboard in your browser. If you
+made your own script from the blueprint, it keeps working; the add-on only creates its
+script when `script.guest_wifi_generate_token` does not exist yet.
+
 ## 1.3.2 (2026-11-20)
 
 - The add-on is now called **Unifi Guest Wi-Fi Voucher Generator** (it was "Guest WiFi

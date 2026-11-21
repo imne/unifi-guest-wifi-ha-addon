@@ -66,12 +66,16 @@ let router = null;        // { url, key, verifyTls, agent } once known
 // managed: the Configuration tab has values, so they win and the in-app setup is off.
 // optionsError: what is wrong with those values, shown in the app.
 let homeAssistant = null;   // set at the bottom: { refreshTokens() } when running under Home Assistant
+let createScript = true;     // option create_script: create script.guest_wifi_generate_token
+let adminsOnly = false;      // option admins_only: only administrators may use the add-on
 let dashboardCard = true;   // option dashboard_card: install the dashboard card
 let managed = false;
 let optionsError = '';
 {
   const o = readJsonFile(config.optionsFile);
   if (o.dashboard_card === false) dashboardCard = false;
+  if (o.create_script === false) createScript = false;
+  if (o.admins_only === true) adminsOnly = true;
   const address = String(o.router_address ?? '').trim();
   const key = String(o.api_key ?? '').trim();
   managed = Boolean(address || key);
@@ -260,9 +264,17 @@ function clientAllowed(req) {
 
 // The signed-in Home Assistant user, from the headers the Supervisor adds.
 function currentUser(req) {
-  if (!req.headers['x-remote-user-id']) return null;
+  const id = String(req.headers['x-remote-user-id'] || '');
+  if (!id) return null;
   const raw = req.headers['x-remote-user-display-name'] || req.headers['x-remote-user-name'] || 'Home Assistant user';
-  return { name: String(raw).replace(/[^\p{L}\p{N} .,'_@-]/gu, '').trim().slice(0, 40) || 'Home Assistant user' };
+  return { id, name: String(raw).replace(/[^\p{L}\p{N} .,'_@-]/gu, '').trim().slice(0, 40) || 'Home Assistant user' };
+}
+
+// true / false, or null when Home Assistant could not be asked. Outside Home Assistant
+// (local testing) everyone counts as an administrator.
+async function userIsAdmin(user) {
+  if (!homeAssistant) return true;
+  return homeAssistant.isAdmin(user.id);
 }
 
 // State-changing requests must be same-origin JSON with our custom header, which a
@@ -293,6 +305,14 @@ async function handle(req, res) {
   const user = currentUser(req);
   if (!user) return send(res, 401, { error: 'Open this page from Home Assistant' });
 
+  // Option admins_only: everyone else gets a short notice instead of the app
+  const admin = await userIsAdmin(user);
+  if (adminsOnly && admin !== true) {
+    const msg = admin === false ? 'Only Home Assistant administrators can use Guest WiFi here.' : 'Could not check whether you are an administrator. Try again in a moment.';
+    if (pathname.startsWith('/api/')) return send(res, 403, { error: msg });
+    return send(res, 403, `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Guest WiFi</title><p>${msg}</p>`, { 'Content-Type': 'text/html; charset=utf-8' });
+  }
+
   if (req.method === 'GET' && staticFiles.has(pathname)) {
     const f = staticFiles.get(pathname);
     return send(res, 200, f.body, { 'Content-Type': f.type, 'Cache-Control': 'no-cache' });
@@ -301,7 +321,7 @@ async function handle(req, res) {
   if (route === 'GET /api/config') {
     // The API key is never sent back, only the router's address.
     return send(res, 200, {
-      user, lifetimes: LIFETIMES, maxCount: config.maxCount, routerUrl: router?.url ?? '', verifyTls: router?.verifyTls ?? false,
+      user: { name: user.name }, isAdmin: admin === true, lifetimes: LIFETIMES, maxCount: config.maxCount, routerUrl: router?.url ?? '', verifyTls: router?.verifyTls ?? false,
       managed, optionsError, needsSetup: !router && !managed,
     });
   }
@@ -309,6 +329,8 @@ async function handle(req, res) {
   if (route === 'POST /api/setup') {
     if (!isTrustedWrite(req)) return send(res, 403, { error: 'Forbidden' });
     if (managed) throw fail(409, "The router is set on the add-on's Configuration tab");
+    if (admin === false) throw fail(403, 'Only Home Assistant administrators can change the router connection');
+    if (admin !== true) throw fail(403, "Could not check whether you are an administrator. Try again in a moment, or set the router on the add-on's Configuration tab");
     await saveSetup(await readJson(req));
     console.log(JSON.stringify({ event: 'router.configured', by: user.name, url: router.url }));
     homeAssistant?.refreshTokens();
@@ -364,5 +386,7 @@ http.createServer((req, res) => {
 // Lets Home Assistant automations create tokens (see automations.js)
 homeAssistant = startAutomations({
   createVouchers, listVouchers, describeError, dashboardCard, version: pkgVersion,
+  createScript: createScript && !adminsOnly,   // the script lets everyone generate, so not with admins_only
+  adminsOnly,
   isConfigured: () => Boolean(router), voucherPrefix: config.voucherPrefix,
 });

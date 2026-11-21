@@ -219,9 +219,16 @@ $('#setup').addEventListener('submit', async (e) => {
     state.routerUrl = cfg.routerUrl || '';
     state.verifyTls = Boolean(cfg.verifyTls);
     // Set on the add-on's Configuration tab: nothing to change in the app
-    $('#open-setup').hidden = Boolean(cfg.managed);
+    $('#open-setup').hidden = Boolean(cfg.managed) || !cfg.isAdmin;
     if (cfg.optionsError) {
       $('#notice-text').textContent = cfg.optionsError;
+      $('#notice').hidden = false;
+      for (const id of ['#generator', '#recent-card']) $(id).hidden = true;
+    } else if (cfg.needsSetup && !cfg.isAdmin) {
+      // Only administrators can connect the router
+      $('#notice-title').textContent = 'Not set up yet';
+      $('#notice-text').textContent = 'The router is not connected yet. Ask a Home Assistant administrator to open Guest WiFi and connect it.';
+      $('#notice-hint').hidden = true;
       $('#notice').hidden = false;
       for (const id of ['#generator', '#recent-card']) $(id).hidden = true;
     } else if (cfg.needsSetup) showSetup(true, { first: true });

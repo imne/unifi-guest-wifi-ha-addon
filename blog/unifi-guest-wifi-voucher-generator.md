@@ -98,8 +98,9 @@ guest network that uses the hotspot portal with vouchers.
 
 ## Good to know
 
-- By default only Home Assistant administrators see the sidebar panel. For everyone else,
-  the dashboard card can be set up to work through the blueprint script.
+- Every Home Assistant user can generate tokens, from the sidebar page and the dashboard
+  card. Only administrators can connect or change the router, and an option limits the
+  whole thing to administrators if you prefer.
 - Token codes are stored in two Home Assistant sensors so the card and automations can read
   them. Anyone who can see entities in your Home Assistant can see the codes.
 - The add-on only lists and revokes tokens it created itself. Vouchers you made in the
